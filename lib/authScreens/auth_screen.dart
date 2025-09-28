@@ -18,6 +18,7 @@ class _AuthScreenState extends State<AuthScreen> {
       child: Scaffold(
         // ici dans le appbar se trouve les boutton 
             appBar: AppBar(
+              // pour enlever le boutton de retour
               automaticallyImplyLeading: false,
               title: const Text(
                 "Astro Seller",
