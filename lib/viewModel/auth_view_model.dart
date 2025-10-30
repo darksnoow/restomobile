@@ -53,7 +53,7 @@ validateSignUpForm(
   String email,
   String password,
   String confirmPassword,
-  String locationAddress,
+  String completeAddress,
   bool termsAccepted,
   BuildContext context,
 ) async {
@@ -63,7 +63,7 @@ validateSignUpForm(
   final trimmedemail = email.trim();
   final trimmedpassword = password.trim();
   final trimmedconfirm = confirmPassword.trim();
-  final trimmedlocation = locationAddress.trim();
+  final trimmedlocation = completeAddress.trim();
 
   // Vérifier l'acceptation des conditions
   if (!termsAccepted) {
@@ -71,7 +71,6 @@ validateSignUpForm(
     return;
   }
 
-  // Vérifier les champs obligatoires
   // Vérifier les champs obligatoires et lister ceux manquants pour faciliter le debug
   final List<String> missingFields = [];
   if (trimmedname.isEmpty) missingFields.add('Nom');
@@ -80,6 +79,7 @@ validateSignUpForm(
   if (trimmedpassword.isEmpty) missingFields.add('Mot de passe');
   if (trimmedconfirm.isEmpty) missingFields.add('Confirmation du mot de passe');
   if (trimmedlocation.isEmpty) missingFields.add('Adresse');
+  if (imageXFile == null) missingFields.add('Photo de profil');
 
   if (missingFields.isNotEmpty) {
     final msg = 'Champs manquants : ${missingFields.join(', ')}';
@@ -106,6 +106,7 @@ validateSignUpForm(
     commonViewModel.showSnackbar("Le mot de passe doit contenir au moins 6 caractères", context);
     return;
   }
+  // L'image est requise (déjà contrôlée dans missingFields)
 
   // Montrer progress
   commonViewModel.showProgressDialog("Création du compte en cours...", context);
@@ -128,71 +129,35 @@ validateSignUpForm(
       return;
     }
 
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) {
+    // Récupérer l'utilisateur courant créé ci-dessus
+    final User? currentFirebaseUser = FirebaseAuth.instance.currentUser;
+    if (currentFirebaseUser == null) {
       commonViewModel.hideProgressDialog(context);
-      commonViewModel.showSnackbar("Impossible de créer l'utilisateur", context);
-      return;
-    }
-    final uid = currentUser.uid;
-
-    // Upload photo only if provided by the caller (AddPhotoProfilePage or signup screen)
-    String? imageUrl;
-    if (imageXFile != null) {
-      try {
-        imageUrl = await uploadImageToStorage(imageXFile);
-      } catch (e, st) {
-        commonViewModel.hideProgressDialog(context);
-        debugPrint('Error uploading image: $e');
-        debugPrint('$st');
-        commonViewModel.showSnackbar("Erreur lors de l'upload de l'image", context);
-        return;
-      }
-    } else {
-      imageUrl = null;
-    }
-
-    // Enregistrement dans Firestore (collection 'sellers')
-    try {
-      await FirebaseFirestore.instance.collection('sellers').doc(uid).set({
-        'uid': uid,
-        'name': name,
-        // Store both keys for backward compatibility
-        'telephone': phone,
-        'phone': phone,
-        'email': email,
-        // Prefer imageUrl; some older code might read 'image'
-        'imageUrl': imageUrl,
-        'image': imageUrl,
-        'role': 'client',
-        'type': 'client',
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-        "status": "approved",
-        "earnings": 0.0,
-        "ratings": 0.0,
-        "shopOpen": true,
-        // Save both lat/latitude keys for compatibility
-        "lat": position!.latitude,
-        "latitude": position!.latitude,
-        "lng": position!.longitude,
-        // Save both address/completAddress keys for compatibility
-        "address": trimmedlocation,
-        "completAddress": trimmedlocation,
-      });
-    } catch (e, st) {
-      commonViewModel.hideProgressDialog(context);
-      debugPrint('Error writing user to Firestore: $e');
-      debugPrint('$st');
-      commonViewModel.showSnackbar("Erreur lors de l'enregistrement des données utilisateur", context);
+      commonViewModel.showSnackbar("Impossible de récupérer l'utilisateur après la création", context);
       return;
     }
 
-  commonViewModel.hideProgressDialog(context);
+    // Uploader l'image (non nulle car validée plus haut)
+    final String downloadUrl = await uploadImageToStorage(imageXFile);
+
+    // Sauvegarder les données utilisateur dans Firestore et localement
+    await saveUserDataToFirestore(
+      currentFirebaseUser,
+      trimmedname,
+      trimmedemail,
+      trimmedpassword,
+      trimmedlocation,
+      trimmedphone,
+      downloadUrl,
+    );
+
+     await readDataFromFirestoreAndSetDataLocally(currentFirebaseUser, context);
+
+     commonViewModel.hideProgressDialog(context);
   // Afficher le message de succès avant la navigation
-  commonViewModel.showSnackbar("Votre compte a été créé avec succès", context);
+     commonViewModel.showSnackbar("Votre compte a été créé avec succès", context);
   // Navigation
-  Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => HomeScreen()));
+     Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => HomeScreen()));
   } catch (e) {
     commonViewModel.hideProgressDialog(context);
     commonViewModel.showSnackbar("Une erreur s'est produite. Veuillez réessayer", context);
@@ -207,14 +172,14 @@ validateSignUpForm(
     // je vais utiliser le package firebase_auth
     await FirebaseAuth.instance
      .createUserWithEmailAndPassword(
-       email: "",
-       password: "").then((valueAuth){
+       email: email,
+       password: password).then((valueAuth){
        currentFirebaseUser = valueAuth.user;
        }).catchError((errorMsg){
         // ici je vais afficher un snackbar pour dire qu'il y a une erreur
         commonViewModel.showSnackbar(errorMsg, context);
        });
-       // ici je vais ajouter une methode pour envoyer un email de verification aussi verifier si l'utilisateur est null
+       // ici je vais ajouter une methode pour envoyer un email de verification aussi verifier si l 'utilisateur est null
        if(currentFirebaseUser == null)
        {
         FirebaseAuth.instance.signOut();
@@ -223,38 +188,26 @@ validateSignUpForm(
        }
        return currentFirebaseUser;
   }
-  
-    // ici je vais creer une methode pour stocker l'image dans firebase storage et recuperer le lien de l'image
-    Future<String> uploadImageToStorage(XFile imageXFile) async {
+  // ici je vais creer une methode pour stocker l'image dans firebase storage et recuperer le lien de l'image
+  uploadImageToStorage(XFile? imageXFile) async {
       // ici je vais utiliser le package firebase_storage
       // je vais creer un identifiant unique pour chaque image
+      String downloadUrl = "";
+
       final fileName = DateTime.now().millisecondsSinceEpoch.toString();
-      final file = File(imageXFile.path);
-      debugPrint('uploadImageToStorage: image path = ${imageXFile.path}');
-      if (!file.existsSync()) {
-        debugPrint('uploadImageToStorage: file does not exist at path');
-        throw Exception('Fichier introuvable: ${imageXFile.path}');
+      fStorage.Reference storageRef = fStorage.FirebaseStorage.instance.ref().child("sellersImages").child(fileName);
+      fStorage.UploadTask uploadTask = storageRef.putFile(File(imageXFile!.path));
+      fStorage.TaskSnapshot taskSnapshot = await uploadTask.whenComplete(() => {});
+      await taskSnapshot.ref.getDownloadURL().then((imageUrl)
+      {
+        downloadUrl = imageUrl;
+        
+      });
+      return downloadUrl;
+     
       }
-
-      // Ensure each upload uses a unique object path inside sellersImages/
-      final fStorage.Reference storageRef = fStorage.FirebaseStorage.instance
-          .ref()
-          .child("sellersImages/$fileName.jpg");
-      debugPrint('uploadImageToStorage: storage path = ${storageRef.fullPath}');
-
-      try {
-        final fStorage.UploadTask uploadTask = storageRef.putFile(file);
-        final fStorage.TaskSnapshot taskSnapshot = await uploadTask.whenComplete(() => {});
-        final downloadUrl = await taskSnapshot.ref.getDownloadURL();
-        debugPrint('uploadImageToStorage: downloadUrl = $downloadUrl');
-        return downloadUrl;
-      } catch (e, st) {
-        debugPrint('uploadImageToStorage: exception during upload -> $e');
-        debugPrint('$st');
-        rethrow;
-      }
-    }
-   saveUserDataToFirestore(currentFirebaseUser, name, email, password, locationAddress, phone, downloadUrl) async
+    
+  saveUserDataToFirestore(currentFirebaseUser, name, email, password, locationAddress, phone, downloadUrl) async
   {
     // ici je vais utiliser le package cloud_firestore
     // je vais creer une instance de la collection users
@@ -265,118 +218,131 @@ validateSignUpForm(
    // je vais utiliser la methode FirebaseFirestore.instance.collection("users").doc(currentFirebaseUser.uid).set({})
    // mais pour l'instant je vais utiliser un id temporaire
                        //! store data in firestore
-    FirebaseFirestore.instance.collection("sellers").doc(currentFirebaseUser.uid).set({
+    await FirebaseFirestore.instance.collection("sellers").doc(currentFirebaseUser.uid)
+    .set(
+      {
      "uid": currentFirebaseUser.uid,
      "name": name,
      "email": email,
+     // stocker les deux clés pour compatibilité
      "image": downloadUrl,
+     "imageUrl": downloadUrl,
      "address": locationAddress,
+     "completAddress": locationAddress,
      "phone": phone,
+     "telephone": phone,
      "status": "approved",
      "earnings": 0.0,
      "ratings": 0.0,
      "shopOpen": true,
+     // dupliquer lat/lng pour compatibilité
+     "latitude": position!.latitude,
+     "longitude": position!.longitude,
      "lat": position!.latitude,
      "lng": position!.longitude,
     });
              // save localy store data in shared preferences
-    sharedPreferences = await SharedPreferences.getInstance();
-    await sharedPreferences!.setString("uid", currentFirebaseUser.uid);
-    await sharedPreferences!.setString("name", name);
-    await sharedPreferences!.setString("email", email);
-    await sharedPreferences!.setString("imageUrl", downloadUrl);
-    await sharedPreferences!.setString("locationAddress", locationAddress);
-    await sharedPreferences!.setString("phone", phone);
-    await sharedPreferences!.setBool("shopOpen", true);
+   // ici je vais mettre appeler la methode shared preferences pour stocker les informations de l'utilisateur en local
+   sharedPreferences ??= await SharedPreferences.getInstance();
+   await sharedPreferences!.setString("uid", currentFirebaseUser.uid);
+   await sharedPreferences!.setString("name", name);
+   await sharedPreferences!.setString("email", email);
+   await sharedPreferences!.setString("imageUrl", downloadUrl);
+  
+  }
+ 
+ 
+ validateSigninForm(String email, String password, BuildContext context) async {
+   
+    if(email.isEmpty || !email.contains("@"))
+    {
+      commonViewModel.showSnackbar("Veuillez entrer une adresse email valide", context);
     }
-    // ...existing methods...
-Future<void> validateSigninForm(String email, String password, BuildContext context) async {
-  if(email.isEmpty) {
-    commonViewModel.showSnackbar("Veuillez entrer votre email", context);
-  } else if(!email.contains("@")) {
-    commonViewModel.showSnackbar("Veuillez entrer un email valide", context);
-  } else if(password.isEmpty) {
-    commonViewModel.showSnackbar("Veuillez entrer votre mot de passe", context);
-  } else {
-    commonViewModel.showProgressDialog("Connexion en cours...", context);
-    User? currentFirebaseUser = await loginUser(email, password);
-    if (currentFirebaseUser == null) {
-      commonViewModel.hideProgressDialog(context);
-      commonViewModel.showSnackbar("Échec de la connexion. Vérifiez vos identifiants.", context);
+    else if(password.isEmpty)
+    {
+      commonViewModel.showSnackbar("Veuillez entrer votre mot de passe", context);
       return;
     }
+    else
+    {
+      // afficher le progress dialog
+      commonViewModel.showProgressDialog("Connexion en cours...", context);
+     User? currentFirebaseUser = await loginUser(email, password, context);
 
-    final ok = await readDataFromFirestoreAndSetDataLocally(currentFirebaseUser, context);
-    if (ok) {
-      commonViewModel.hideProgressDialog(context);
-      commonViewModel.showSnackbar("Connexion réussie", context);
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => HomeScreen()));
-    } else {
-      commonViewModel.hideProgressDialog(context);
+     await readDataFromFirestoreAndSetDataLocally(currentFirebaseUser, context);
+     Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => HomeScreen()));
+ 
     }
   }
-}
 
-Future<User?> loginUser(String email, String password) async {
-  User? currentFirebaseUser;
-  try {
-    final valueAuth = await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password);
-    currentFirebaseUser = valueAuth.user;
-  } catch (errorMsg) {
-    debugPrint("loginUser: ${errorMsg.toString()}");
+
+  loginUser(String email, String password, BuildContext context) async {
+      User? currentFirebaseUser;
+    await FirebaseAuth.instance
+      .signInWithEmailAndPassword(email: email, password: password)
+      .then((valueAuth) {
+        currentFirebaseUser = valueAuth.user;
+      }).catchError((errorMsg) {
+
+
+        commonViewModel.hideProgressDialog(context);
+        commonViewModel.showSnackbar("Erreur lors de la connexion: $errorMsg", context);
+      });
+
+      if(currentFirebaseUser == null)
+      {
+        FirebaseAuth.instance.signOut();
+        commonViewModel.hideProgressDialog(context);
+        commonViewModel.showSnackbar("Impossible de se connecter. Veuillez réessayer.", context);
+        return;
+      }
+      
+     return currentFirebaseUser;
+
   }
-  return currentFirebaseUser;
+
+  readDataFromFirestoreAndSetDataLocally(User? currentFirebaseUser,BuildContext context) async {
+        await FirebaseFirestore.instance
+        .collection("sellers")
+        .doc(currentFirebaseUser!.uid)
+        .get().then((dataSnapshot) async
+        {
+          if(dataSnapshot.exists){
+
+            if(dataSnapshot.data()!["status"] == "approved")
+            {
+              // stocker les donnees localement
+                await sharedPreferences!.setString("uid", currentFirebaseUser.uid);
+                await sharedPreferences!.setString("name", dataSnapshot.data()!["name"]);
+                await sharedPreferences!.setString("email", dataSnapshot.data()!["email"]);
+                await sharedPreferences!.setString("imageUrl", dataSnapshot.data()!["image"]);
+            }
+            else
+            {
+              commonViewModel.hideProgressDialog(context);
+              commonViewModel.showSnackbar("Votre compte n'est pas encore approuvé. Veuillez contacter l'administrateur:thinkerteamgui@gmail.com.", context);
+              FirebaseAuth.instance.signOut();
+              return;
+            }
+          }
+          else
+          {
+              commonViewModel.showSnackbar("Cette Utilisateur n'existe pas.", context);
+              FirebaseAuth.instance.signOut();
+                return;
+              }
+            
+            });
+
+         
+         }
+       
+       
+       
 }
-Future<bool> readDataFromFirestoreAndSetDataLocally(User? currentUser, BuildContext context) async {
-  if (currentUser == null) return false;
-  try {
-    final datasnapshot = await FirebaseFirestore.instance.collection("sellers").doc(currentUser.uid).get();
-    if (!datasnapshot.exists) {
-      commonViewModel.showSnackbar("Votre compte de vendeur n'existe pas.", context);
-      debugPrint("readDataFromFirestoreAndSetDataLocally: No seller document found for uid ${currentUser.uid}");
-      await FirebaseAuth.instance.signOut();
-      return false;
-    }
-
-    final data = datasnapshot.data() as Map<String, dynamic>;
-    if ((data["status"] ?? "") != "approved") {
-      commonViewModel.showSnackbar("Votre compte n'est pas approuvé. Veuillez contacter le support.", context);
-      debugPrint("readDataFromFirestoreAndSetDataLocally: Seller account not approved for uid ${currentUser.uid}");
-      await FirebaseAuth.instance.signOut();
-      return false;
-    }
-
-    // Ensure sharedPreferences instance exists
-    if (sharedPreferences == null) {
-      sharedPreferences = await SharedPreferences.getInstance();
-    }
-
-    final String uid = currentUser.uid;
-    final String name = (data["name"] ?? "").toString();
-    final String email = (data["email"] ?? "").toString();
-    final String phone = (data["phone"] ?? data["telephone"] ?? "").toString();
-    final String imageUrl = (data["imageUrl"] ?? data["image"] ?? "").toString();
-    final String address = (data["address"] ?? data["completAddress"] ?? "").toString();
-    final bool shopOpen = (data["shopOpen"] ?? true) == true;
-    final String status = (data["status"] ?? "").toString();
-
-    await sharedPreferences!.setString("status", status);
-    await sharedPreferences!.setString("uid", uid);
-    await sharedPreferences!.setString("name", name);
-    await sharedPreferences!.setString("email", email);
-    await sharedPreferences!.setString("phone", phone);
-    await sharedPreferences!.setString("imageUrl", imageUrl);
-    await sharedPreferences!.setString("locationAddress", address);
-    await sharedPreferences!.setBool("shopOpen", shopOpen);
-    return true;
-  } catch (error) {
-    debugPrint("readDataFromFirestoreAndSetDataLocally: Error fetching seller document: $error");
-    return false;
-  }
-}
-}
-
-
+        
+      
+      
 
 
 

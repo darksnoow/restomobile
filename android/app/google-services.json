@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "376690314683",
+    "project_id": "astromiam-app",
+    "storage_bucket": "astromiam-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:376690314683:android:290a6b6b66a8f9d817c89e",
+        "android_client_info": {
+          "package_name": "com.thinker.sellers_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "376690314683-vqjnuur82jlf6c6ejhdr9d22tem4appf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.thinker.sellers_app",
+            "certificate_hash": "738a5f50d753c12bcbb83d2fcc201f1c38b901a2"
+          }
+        },
+        {
+          "client_id": "376690314683-33grf5kmgq5fmnm52d6j9bmh8m5eud5m.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB5n3b-tomo0eBeORwmVbP_v-gF2gEL7ds"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "376690314683-33grf5kmgq5fmnm52d6j9bmh8m5eud5m.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

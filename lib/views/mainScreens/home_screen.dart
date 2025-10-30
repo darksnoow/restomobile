@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sellers_app/views/widgets/my_drawer.dart';
 
 
 class HomeScreen extends StatefulWidget {
@@ -17,7 +18,7 @@ class _HomeScreenState extends State<HomeScreen>
   Widget build(BuildContext context) 
   {
     return Scaffold(
-
+       drawer: MyDrawer(),
        appBar: AppBar(
         title: Text(
             "HOME PAGE"

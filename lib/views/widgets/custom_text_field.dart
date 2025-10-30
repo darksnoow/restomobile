@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 // ce code est utilisable a chaque fois qu'on a besoin de cree un nouveau text field faut simplement pas oublier de donner les parametre lier creer les 5 parametres
+// l'avantage de ce widget c'est qu'on peut le reutiliser a chaque fois qu'on a besoin d'un text field pour eviter de recrire le meme code a chaque fois et modifier seulement les parametre de tout les text field
 class CustomTextField extends StatefulWidget {
      // ici on place les controler le controler(nature)-le nom du controler
      TextEditingController? textEditingController ;
@@ -23,8 +24,8 @@ class _CustomTextFieldState extends State<CustomTextField> {
         color: Colors.white,
         borderRadius: BorderRadius.all(Radius.circular(12)),
       ),
-       padding: const EdgeInsets.all(8),
-       margin: const EdgeInsets.all(8),
+       padding: const EdgeInsets.all(11),
+       margin: const EdgeInsets.all(12),
        child: TextFormField(
         // ici on active les controler cree en haut de l'app
         enabled: widget.enabled,

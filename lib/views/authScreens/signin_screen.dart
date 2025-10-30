@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:sellers_app/widgets/custom_text_field.dart';
+import 'package:sellers_app/global/global_instances.dart';
+import 'package:sellers_app/views/widgets/custom_text_field.dart';
 
 
 class SigninScreen extends StatefulWidget {
@@ -17,9 +18,11 @@ class _SigninScreenState extends State<SigninScreen>
   
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
+    return Scaffold(
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
 
          Container(
           alignment: Alignment.bottomCenter,
@@ -61,7 +64,12 @@ class _SigninScreenState extends State<SigninScreen>
                ElevatedButton(
                 onPressed: ()
                 {
-
+                  
+                    authViewModel.validateSigninForm(
+                      emailTextEditingController.text.trim(),
+                      passwordTextEditingController.text.trim(),
+                      context,
+                    );
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.blueAccent,
@@ -80,7 +88,9 @@ class _SigninScreenState extends State<SigninScreen>
           ),
          ),
 
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }

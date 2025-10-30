@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:sellers_app/authScreens/signin_screen.dart';
-import 'package:sellers_app/authScreens/signup_screen.dart';
+import 'package:sellers_app/views/authScreens/signin_screen.dart';
+import 'package:sellers_app/views/authScreens/signup_screen.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
